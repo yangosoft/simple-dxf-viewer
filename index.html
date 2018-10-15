@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Html5 DXF viewer</title>
+  <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+  <script type="text/javascript" src="dxf-parser/dist/dxf-parser.js"></script>
+
+
+
+
+
+  <style>
+    #progress_bar {
+      margin: 10px 0;
+      padding: 3px;
+      border: 1px solid #000;
+      font-size: 14px;
+      clear: both;
+      opacity: 0;
+      -moz-transition: opacity 1s linear;
+      -o-transition: opacity 1s linear;
+      -webkit-transition: opacity 1s linear;
+    }
+
+    #progress_bar.loading {
+      opacity: 1.0;
+    }
+
+    #progress_bar .percent {
+      background-color: #99ccff;
+      height: auto;
+      width: 0;
+    }
+  </style>
+</head>
+
+<input type="file" id="files" name="file" />
+<button onclick="abortRead();">Cancel</button>
+<div id="progress_bar">
+  <div class="percent">0%</div>
+</div>
+
+
+
+<canvas id="canvas1" width="4096" height="4096"></canvas>
+
+<!-- for copying purposes -->
+<canvas id="hidden1" width="4096" height="4096" style="visibility: hidden;"></canvas>
+
+<script>
+  var OFFSET = 700; //Offset from coordinate origin
+  var SCALE = 80.0; //Scale of the plane
+
+  var reader;
+  var progress = document.querySelector('.percent');
+
+  function abortRead() {
+    reader.abort();
+  }
+
+  function errorHandler(evt) {
+    switch (evt.target.error.code) {
+      case evt.target.error.NOT_FOUND_ERR:
+        alert('File Not Found!');
+        break;
+      case evt.target.error.NOT_READABLE_ERR:
+        alert('File is not readable');
+        break;
+      case evt.target.error.ABORT_ERR:
+        break; // noop
+      default:
+        alert('An error occurred reading this file.');
+    };
+  }
+
+  function updateProgress(evt) {
+
+    if (evt.lengthComputable) {
+      var percentLoaded = Math.round((evt.loaded / evt.total) * 100);
+      if (percentLoaded < 100) {
+        progress.style.width = percentLoaded + '%';
+        progress.textContent = percentLoaded + '%';
+      }
+    }
+  }
+
+
+
+  //Draws the dxf file inside the context
+  function drawIt(dxf, context, scale = 50, offset = 500) {
+
+
+
+    context.clearRect(0, 0, context.canvas.width, context.canvas.height); // Clears the canvas
+    context.strokeStyle = "#000000";
+
+    context.lineWidth = 1;
+
+
+    console.log("ENTI; ", dxf.entities.length);
+
+    for (let j = 0; j < dxf.entities.length; j++) {
+      let ent = dxf.entities[j];
+      console.log(ent);
+      if (ent.type == "LWPOLYLINE") {
+        let v = ent.vertices;
+        for (let i = 0; i < v.length - 1; i++) {
+          context.beginPath();
+          let p1x = (v[i].x * scale) + offset;
+          let p1y = (v[i].y * (-scale)) + offset;
+          let p2x = (v[i + 1].x * scale) + offset;
+          let p2y = (v[i + 1].y * (-scale)) + offset;
+
+          console.log(p1x, p1y, p2x, p2y);
+
+          context.moveTo(p1x, p1y);
+          context.lineTo(p2x, p2y);
+          context.closePath();
+          context.stroke();
+        }
+      }
+    }
+
+    //Copy to the hidden canvas
+    var destinationCanvas = document.getElementById('hidden1');
+    var destCtx = destinationCanvas.getContext('2d');
+    destCtx.drawImage(context.canvas, 0, 0);
+  }
+
+  function handleFileSelect(evt) {
+    // Reset progress indicator on new file selection.
+    progress.style.width = '0%';
+    progress.textContent = '0%';
+
+    reader = new FileReader();
+    reader.onerror = errorHandler;
+    reader.onprogress = updateProgress;
+    reader.onabort = function(e) {
+      alert('File read cancelled');
+    };
+    reader.onloadstart = function(e) {
+      document.getElementById('progress_bar').className = 'loading';
+    };
+    reader.onload = function(e) {
+      progress.style.width = '100%';
+      progress.textContent = '100%';
+      setTimeout("document.getElementById('progress_bar').className='';", 2000);
+
+
+
+      var fileText = e.currentTarget.result;
+      var parser = new DxfParser();
+      var dxf = parser.parseSync(fileText);
+      var context = document.getElementById('canvas1').getContext("2d");
+      drawIt(dxf, context, SCALE, OFFSET);
+
+
+
+    }
+
+
+    reader.readAsBinaryString(evt.target.files[0]);
+  }
+
+  document.getElementById('files').addEventListener('change', handleFileSelect, false);
+</script>
+
+
+<script>
+  var context = document.getElementById('canvas1').getContext("2d");
+  context.clearRect(0, 0, context.canvas.width, context.canvas.height); // Clears the canvas
+  context.strokeStyle = "#df4b26";
+  context.lineJoin = "round";
+  context.lineWidth = 5;
+
+
+  var elem = document.getElementById('canvas1'),
+    elemLeft = elem.offsetLeft,
+    elemTop = elem.offsetTop,
+    elements = [];
+
+  var points = [];
+
+  var validPoints = [];
+
+  var onClick = false;
+  var onClickX = 0;
+  var onClickY = 0;
+
+
+  function drawMesures() {
+
+    for (let j = 0; j < validPoints.length - 1; j = j + 2) {
+      console.log(points);
+      context.strokeStyle = "#0404ff";
+      context.setLineDash([3, 7]);
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(validPoints[j].x, validPoints[j].y);
+
+      context.lineTo(validPoints[j + 1].x, validPoints[j + 1].y);
+      context.closePath();
+      context.stroke();
+
+
+      let l = Math.sqrt(Math.pow(validPoints[j + 1].x - validPoints[j].x, 2) + Math.pow(validPoints[j + 1].y - validPoints[j].y, 2));
+      console.log(l / SCALE);
+
+      context.font = "20px Arial";
+      context.fillText((l / SCALE) + " m", validPoints[j].x, validPoints[j].y - 15);
+    }
+  }
+
+
+  document.getElementById('canvas1').addEventListener('click', function(event) {
+    var x = event.pageX - elemLeft,
+      y = event.pageY - elemTop;
+
+
+    console.log('clicked an element', x, y);
+    points.push({
+      x: x,
+      y: y
+    });
+
+    if (points.length == 2) {
+
+      context.restore();
+      context.clearRect(0, 0, context.canvas.width, context.canvas.height); // Clears the canvas
+      var destinationCanvas = document.getElementById('hidden1');
+      context.drawImage(destinationCanvas, 0, 0);
+
+      onClick = false;
+      validPoints.push(points[0]);
+      validPoints.push(points[1]);
+
+      points.splice(0, points.length);
+
+
+
+      var destinationCanvas = document.getElementById('hidden1');
+      var destCtx = destinationCanvas.getContext('2d');
+      destCtx.drawImage(context.canvas, 0, 0);
+      drawMesures();
+
+    } else {
+      //First click to draw the measure line
+      onClickX = x;
+      onClickY = y;
+      onClick = true;
+    }
+
+
+  });
+
+
+  function getMousePos(canvas, evt) {
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: evt.clientX - rect.left,
+      y: evt.clientY - rect.top
+    };
+  }
+
+  document.getElementById('canvas1').addEventListener('mousemove', function(evt) {
+    var mousePos = getMousePos(document.getElementById('canvas1'), evt);
+    //var message = 'Mouse position: ' + mousePos.x + ',' + mousePos.y;
+    context.save();
+    context.clearRect(0, 0, context.canvas.width, context.canvas.height); // Clears the canvas
+    var destinationCanvas = document.getElementById('hidden1');
+    context.drawImage(destinationCanvas, 0, 0);
+    context.strokeStyle = "#ff0000";
+    context.setLineDash([1, 2]);
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(mousePos.x, mousePos.y);
+    context.lineTo(mousePos.x, 0);
+    context.lineTo(mousePos.x, context.canvas.height);
+    context.closePath();
+    context.stroke();
+
+    context.beginPath();
+    context.moveTo(mousePos.x, mousePos.y);
+    context.lineTo(0, mousePos.y);
+    context.lineTo(context.canvas.width, mousePos.y);
+    context.closePath();
+    context.stroke();
+    context.restore();
+
+    if (onClick) {
+
+      context.clearRect(0, 0, context.canvas.width, context.canvas.height); // Clears the canvas
+      var destinationCanvas = document.getElementById('hidden1');
+      context.drawImage(destinationCanvas, 0, 0);
+      context.strokeStyle = "#0404ff";
+      context.setLineDash([3, 7]);
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(onClickX, onClickY);
+      context.lineTo(mousePos.x, mousePos.y);
+      context.closePath();
+      context.stroke();
+
+      context.save();
+
+      context.drawImage(destinationCanvas, 0, 0);
+      context.strokeStyle = "#ff0000";
+      context.setLineDash([1, 2]);
+      context.lineWidth = 1;
+      context.beginPath();
+      context.moveTo(mousePos.x, mousePos.y);
+      context.lineTo(mousePos.x, 0);
+      context.lineTo(mousePos.x, context.canvas.height);
+      context.closePath();
+      context.stroke();
+
+      context.beginPath();
+      context.moveTo(mousePos.x, mousePos.y);
+      context.lineTo(0, mousePos.y);
+      context.lineTo(context.canvas.width, mousePos.y);
+      context.closePath();
+      context.stroke();
+      context.restore();
+
+    }
+
+    drawMesures();
+
+
+
+  }, false);
+</script>
+
+</html>
