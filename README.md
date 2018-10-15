@@ -6,6 +6,6 @@ I needed a DXF viewer in Linux to take some measures and this is a very simple t
 Load a DXF file and click 2 times to measure a distance.
 
 
-```$ git submodule init
+`$ git submodule init
 $ git submodule update
-$ python -m SimpleHTTPServer```
+$ python -m SimpleHTTPServer`
